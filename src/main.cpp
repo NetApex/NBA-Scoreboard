@@ -7,7 +7,7 @@
 #include <XPT2046_Touchscreen.h>
 #include <HTTPClient.h>       // Include HTTPClient library
 #include "secrets.h"          // Include secrets.h for API key
-#include <FirebaseClient.h> // Firebase Client library v2.0 (mobizt) - CORRECT INCLUDE
+#include <FirebaseClient.h>   // Firebase Client library v2.0 (mobizt) - CORRECT INCLUDE
 
 // --- Firebase Project Settings (Replace with your own in secrets.h!) ---
 #define FIREBASE_HOST FIREBASE_PROJECT_ID ".firebaseio.com" // Firebase project HOST from secrets.h
@@ -19,7 +19,7 @@
 #define FIREBASE_GAMES_PATH "nba_games" // Path to your nba_games data in Firebase Realtime DB
 
 // --- Firebase Objects ---
-FirebaseData firebaseData;
+FirebaseDataStream firebaseData; // Corrected to FirebaseDataStream
 FirebaseAuth firebaseAuth;
 FirebaseConfig firebaseConfig;
 
@@ -61,18 +61,19 @@ void displayMessage(const String& message) {
 void fetchNBAGamesFromFirebase() {
   Serial.println("Fetching NBA games from Firebase Realtime DB...");
 
+  FirebaseDataStream firebaseData_local; // **Declare FirebaseDataStream object LOCALLY - Corrected to FirebaseDataStream**
   FirebaseJson json; // Declare FirebaseJson object locally for getJSON
-  firebaseData.clear(); // Clear firebaseData object before getJSON - IMPORTANT for v2.0 lib
+  firebaseData_local.clear(); // Clear firebaseData_local object before getJSON - CORRECTED to local object
 
-  if (Firebase.get(firebaseData, FIREBASE_GAMES_PATH)) { // **Use Firebase.get() for v2.0 lib - different syntax**
-    if (firebaseData.dataType() == FirebaseJson::JSON_OBJECT) {
+  if (Firebase.get(firebaseData_local, FIREBASE_GAMES_PATH)) { // **Use Firebase.get() for v2.0 lib - different syntax**
+    if (firebaseData_local.dataType() == FirebaseJson::JSON_OBJECT) {
       Serial.println("Successfully fetched NBA games from Firebase Realtime DB!");
 
-      // FirebaseJson *gamesJson = firebaseData.jsonObjectPtr(); // No longer needed, use local json object
+      // FirebaseJson *gamesJson = firebaseData_local.jsonObjectPtr(); // No longer needed, use local json object
       FirebaseJsonData jsonData;
 
       // --- Iterate through the JSON object (assuming game IDs are keys) ---
-      json.setJsonString(firebaseData.payload()); // **Important: Parse payload for v2.0 lib**
+      json.setJsonString(firebaseData_local.payload()); // **Important: Parse payload for v2.0 lib**
       for (FirebaseJson::Iterator iterator = json.iterator(); iterator.hasNext(); ) { // Iterate over local json object
         iterator.next(&jsonData);
         String gameId = jsonData.key(); // Game ID is the key in the JSON object
@@ -100,13 +101,13 @@ void fetchNBAGamesFromFirebase() {
     } else {
       Serial.println("Error: Incorrect data type received from Firebase (not a JSON Object).");
       Serial.print("Data type: ");
-      Serial.println(firebaseData.dataTypeStr());
+      Serial.println(firebaseData_local.dataTypeStr());
     }
   } else {
     Serial.print("Error fetching NBA games from Firebase Realtime DB: ");
-    Serial.println(firebaseData.errorReason());
+    Serial.println(firebaseData_local.errorReason());
     Serial.print("HTTP Code: "); // Added HTTP code output for debugging v2.0 lib
-    Serial.println(firebaseData.httpCode()); // Added HTTP code output for debugging v2.0 lib
+    Serial.println(firebaseData_local.httpCode()); // Added HTTP code output for debugging v2.0 lib
   }
 }
 
