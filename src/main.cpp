@@ -65,7 +65,7 @@ void fetchNBAGamesFromFirebase() {
   FirebaseJson json; // Declare FirebaseJson object locally for getJSON
   firebaseData_local.clear(); // **Clear firebaseData_local before getJSON**
 
-  if (Firebase.RTDB.getJSON(firebaseData_local, FIREBASE_GAMES_PATH, &json)) {
+  if (Firebase.RTDB.getJSON(firebaseData_local, &json, FIREBASE_GAMES_PATH)) { // Reordered arguments: firebaseData, &json, path
     if (firebaseData_local.dataType() == FirebaseJson::JSON_OBJECT) { // Check local firebaseData_local object's dataType
       Serial.println("Successfully fetched NBA games from Firebase Realtime DB!");
 
