@@ -7,7 +7,7 @@
 #include <XPT2046_Touchscreen.h>
 #include <HTTPClient.h>       // Include HTTPClient library
 #include "secrets.h"          // Include secrets.h for API key
-#include <Firebase_ESP_Client.h>   // Firebase ESP32 client library (mobizt version)
+#include <FirebaseClient.h> // Firebase Client library v2.0 (mobizt) - CORRECT INCLUDE
 
 // --- Firebase Project Settings (Replace with your own in secrets.h!) ---
 #define FIREBASE_HOST FIREBASE_PROJECT_ID ".firebaseio.com" // Firebase project HOST from secrets.h
@@ -16,7 +16,7 @@
 #define FIREBASE_USER_PASSWORD FIREBASSE_USER_PASSWORD     // Firebase auth password from secrets.h (if using email/password auth)
 
 // --- Firebase Data Paths ---
-#define FIREBASE_GAMES_PATH "nba_games" // Path to your nba_games collection in Firestore (Realtime DB path for mobizt lib)
+#define FIREBASE_GAMES_PATH "nba_games" // Path to your nba_games data in Firebase Realtime DB
 
 // --- Firebase Objects ---
 FirebaseData firebaseData;
@@ -57,22 +57,22 @@ void displayMessage(const String& message) {
   Serial.println(message);
 }
 
-// --- Function to Fetch NBA Games from Firebase Realtime DB (mobizt lib) ---
+// --- Function to Fetch NBA Games from Firebase Realtime DB (mobizt FirebaseClient v2.0 lib) ---
 void fetchNBAGamesFromFirebase() {
   Serial.println("Fetching NBA games from Firebase Realtime DB...");
 
-  FirebaseData firebaseData_local; // **Declare FirebaseData object LOCALLY**
   FirebaseJson json; // Declare FirebaseJson object locally for getJSON
-  firebaseData_local.clear(); // **Clear firebaseData_local before getJSON**
+  firebaseData.clear(); // Clear firebaseData object before getJSON - IMPORTANT for v2.0 lib
 
-  if (Firebase.RTDB.getJSON(firebaseData_local, &json, FIREBASE_GAMES_PATH)) { // Reordered arguments: firebaseData, &json, path
-    if (firebaseData_local.dataType() == FirebaseJson::JSON_OBJECT) { // Check local firebaseData_local object's dataType
+  if (Firebase.get(firebaseData, FIREBASE_GAMES_PATH)) { // **Use Firebase.get() for v2.0 lib - different syntax**
+    if (firebaseData.dataType() == FirebaseJson::JSON_OBJECT) {
       Serial.println("Successfully fetched NBA games from Firebase Realtime DB!");
 
-      // FirebaseJson *gamesJson = firebaseData_local.jsonObjectPtr(); // No longer needed, use local json object
+      // FirebaseJson *gamesJson = firebaseData.jsonObjectPtr(); // No longer needed, use local json object
       FirebaseJsonData jsonData;
 
       // --- Iterate through the JSON object (assuming game IDs are keys) ---
+      json.setJsonString(firebaseData.payload()); // **Important: Parse payload for v2.0 lib**
       for (FirebaseJson::Iterator iterator = json.iterator(); iterator.hasNext(); ) { // Iterate over local json object
         iterator.next(&jsonData);
         String gameId = jsonData.key(); // Game ID is the key in the JSON object
@@ -100,11 +100,13 @@ void fetchNBAGamesFromFirebase() {
     } else {
       Serial.println("Error: Incorrect data type received from Firebase (not a JSON Object).");
       Serial.print("Data type: ");
-      Serial.println(firebaseData_local.dataTypeStr()); // Check local firebaseData_local object's dataTypeStr
+      Serial.println(firebaseData.dataTypeStr());
     }
   } else {
     Serial.print("Error fetching NBA games from Firebase Realtime DB: ");
-    Serial.println(firebaseData_local.errorReason()); // Check local firebaseData_local object's errorReason
+    Serial.println(firebaseData.errorReason());
+    Serial.print("HTTP Code: "); // Added HTTP code output for debugging v2.0 lib
+    Serial.println(firebaseData.httpCode()); // Added HTTP code output for debugging v2.0 lib
   }
 }
 
@@ -145,12 +147,12 @@ void setup() {
 
   // --- Initialize Firebase ---
   firebaseConfig.host = FIREBASE_HOST;        // Use FIREBASE_HOST from secrets.h
-  firebaseConfig.token_status_payload_info = FIREBASE_AUTH_TOKEN; // Use FIREBASE_API_KEY as token for mobizt lib
+  firebaseConfig.apiKey = FIREBASE_AUTH_TOKEN; // **apiKey instead of token_status_payload_info for v2.0 lib**
   firebaseAuth.user.email = FIREBASE_USER_EMAIL; // Use FIREBASE_USER_EMAIL from secrets.h
   firebaseAuth.user.password = FIREBASE_USER_PASSWORD; // Use FIREBASE_USER_PASSWORD from secrets.h
   Firebase.begin(&firebaseConfig, &firebaseAuth);
   Firebase.reconnectWiFi(true);
-  Serial.println("Firebase initialized (mobizt lib)");
+  Serial.println("Firebase initialized (mobizt FirebaseClient v2.0)"); // Updated Serial output
   displayMessage("Firebase\nInitialized!");
 
   // --- Web Server Routes ---
