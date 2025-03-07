@@ -8,7 +8,6 @@
 #include <HTTPClient.h>       // Include HTTPClient library
 #include "secrets.h"          // Include secrets.h for API key
 #include <Firebase_ESP_Client.h>   // Firebase ESP32 client library (mobizt version)
-#include <FirebaseJson.h>     // FirebaseJson library
 
 // --- Firebase Project Settings (Replace with your own in secrets.h!) ---
 #define FIREBASE_HOST FIREBASE_PROJECT_ID ".firebaseio.com" // Firebase project HOST from secrets.h
@@ -64,8 +63,9 @@ void fetchNBAGamesFromFirebase() {
 
   FirebaseData firebaseData_local; // **Declare FirebaseData object LOCALLY**
   FirebaseJson json; // Declare FirebaseJson object locally for getJSON
+  firebaseData_local.clear(); // **Clear firebaseData_local before getJSON**
 
-  if (Firebase.RTDB.getJSON(firebaseData_local, FIREBASE_GAMES_PATH, &json)) { // Use local firebaseData_local object
+  if (Firebase.RTDB.getJSON(firebaseData_local, FIREBASE_GAMES_PATH, &json)) {
     if (firebaseData_local.dataType() == FirebaseJson::JSON_OBJECT) { // Check local firebaseData_local object's dataType
       Serial.println("Successfully fetched NBA games from Firebase Realtime DB!");
 
