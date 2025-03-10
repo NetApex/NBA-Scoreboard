@@ -7,6 +7,7 @@
 #include <XPT2046_Touchscreen.h>
 #include <HTTPClient.h>       // Include HTTPClient library
 #include "secrets.h"          // Include secrets.h for AP
+#include <ArduinoJson.h>     // Required for JSON parsing
 
 
 // --- Firebase Data Paths ---
@@ -33,6 +34,11 @@ SPIClass vspi = SPIClass(VSPI);
 XPT2046_Touchscreen ts(XPT2046_CS, XPT2046_IRQ);
 Adafruit_ILI9341 tft = Adafruit_ILI9341(&hspi, TFT_DC, TFT_CS, TFT_RST);
 
+bool wifiConnected = false;
+unsigned long lastDisplayTime = 0; // Variable to store last display time
+unsigned long currentTime = 0;
+const long displayInterval = 300000; // 5 minutes
+
 // --- Web Server ---
 AsyncWebServer server(80); // Create AsyncWebServer object on port 80
 
@@ -46,6 +52,103 @@ void displayMessage(const String& message) {
   Serial.println(message);
 }
 
+String getFirebaseData() { // **Refactored for HTTP GET to Cloud Function**
+    if (!wifiConnected) {
+        Serial.println("WiFi not connected, cannot get NBA scores.");
+        return "WiFi not connected";
+    }
+
+    HTTPClient http;
+    String serverURL = CLOUD_FUNCTION_URL_GET_SCORES; // Use defined Cloud Function URL
+    http.begin(serverURL.c_str());
+
+    String jsonResponse;
+
+    int httpResponseCode = http.GET();
+
+    if (httpResponseCode > 0) {
+        Serial.print("HTTP Response code: ");
+        Serial.println(httpResponseCode);
+
+        if (httpResponseCode == HTTP_CODE_OK) {
+            jsonResponse = http.getString();
+            Serial.print("Response body: \n");
+            Serial.println(jsonResponse);
+        } else {
+            Serial.printf("GET request failed, error: %s\n", http.errorToString(httpResponseCode).c_str());
+            jsonResponse = "Error: HTTP GET failed";
+        }
+    } else {
+        Serial.printf("GET request failed, connection error: %s\n", http.errorToString(httpResponseCode).c_str());
+        jsonResponse = "Error: HTTP connection failed";
+    }
+
+    http.end();
+    return jsonResponse;
+}
+
+String processNBAScores(String jsonInput) {
+    if (jsonInput.startsWith("Error:")) {
+        return jsonInput;
+    }
+
+    DynamicJsonDocument doc(4096);
+    DeserializationError error = deserializeJson(doc, jsonInput);
+
+    if (error) {
+        Serial.print("deserializeJson() failed: ");
+        Serial.println(error.c_str());
+        return "Error: JSON Parse Failed";
+    }
+
+    String output = "";
+    if (doc.containsKey("games")) {
+        JsonArray games = doc["games"].as<JsonArray>();
+
+        if (games.size() == 0) {
+            return "No games scheduled.";
+        }
+
+        for (JsonObject game : games) {
+            String homeTeam = game["homeTeam"] | "N/A";
+            String awayTeam = game["awayTeam"] | "N/A";
+            int homeScore = game["homeScore"] | 0;
+            int awayScore = game["awayScore"] | 0;
+            String gameStatus = game["gameStatus"] | "N/A";
+
+            output += awayTeam + " vs " + homeTeam + "\n";
+            output += "Score: " + String(awayScore) + "-" + String(homeScore) + "\n";
+            output += "Status: " + gameStatus + "\n\n";
+        }
+    } else {
+        return "Error: Invalid JSON format - 'games' key missing";
+    }
+    return output;
+}
+
+void displayScores(String scores) {
+    tft.fillScreen(ILI9341_BLACK);
+    tft.setCursor(0, 0);
+    tft.setTextSize(2);
+
+    if (scores.startsWith("Error:") || scores.startsWith("WiFi not connected") || scores.startsWith("No games")) {
+        tft.print(scores.substring(0, 20)); // Display first part of error
+    } else {
+        char buffer[256];
+        char *line;
+        int lineCount = 0;
+        int yPos = 0; // Start from top
+
+        line = strtok(const_cast<char*>(scores.c_str()), "\n");
+        while (line != nullptr && lineCount < 6) { // Limit to 6 lines for TFT
+            strncpy(buffer, line, sizeof(buffer) - 1);
+            buffer[sizeof(buffer) - 1] = '\0';
+            tft.println(buffer); // Use println for TFT display
+            line = strtok(nullptr, "\n");
+            lineCount++;
+        }
+    }
+}
 
 void setup() {
     Serial.begin(115200);
@@ -55,7 +158,7 @@ void setup() {
     digitalWrite(TFT_BL, HIGH);
 
     tft.begin();
-    tft.setRotation(1);
+    tft.setRotation(3);
     tft.fillScreen(ILI9341_BLACK);
 
     vspi.begin(XPT2046_CLK, XPT2046_MISO, XPT2046_MOSI, XPT2046_CS);
@@ -66,6 +169,7 @@ void setup() {
     displayMessage("Connect to NBA_Scoreboard_AP\nand enter password: netapex123");
 
     WiFiManager wm;
+    // wm.resetSettings(); // For testing - clears saved WiFi credentials
 
     if (!wm.autoConnect("NBA_Scoreboard_AP", "netapex123")) {
         displayMessage("WiFi Connect\nFailed!");
@@ -92,6 +196,13 @@ void setup() {
 }
 
 void loop() {  // Your main code will go here (NBA data, web server, etc.)
-    delay(10000);
-    Serial.println("Still connected to WiFi and web server running...");
+    if (wifiConnected) {
+        if (millis() - lastDisplayTime >= displayInterval) {
+            lastDisplayTime = millis();
+            String nbaScoresJson = getFirebaseData(); // Get data from Cloud Function
+            String scoresDisplay = processNBAScores(nbaScoresJson);
+            displayScores(scoresDisplay);
+        }
+    }
+    delay(1000); // Check every second
 }
